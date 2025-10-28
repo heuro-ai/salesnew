@@ -1,13 +1,13 @@
-import { GoogleGenAI } from '@google/genai';
 import type { UserInput, Company } from '../types';
 
 const RAPIDAPI_KEY = import.meta.env.VITE_RAPIDAPI_KEY;
+const PERPLEXITY_API_KEY = import.meta.env.VITE_PERPLEXITY_API_KEY;
 
-if (!import.meta.env.VITE_API_KEY) {
-  throw new Error("VITE_API_KEY environment variable not set");
+if (!PERPLEXITY_API_KEY) {
+  throw new Error("VITE_PERPLEXITY_API_KEY environment variable not set");
 }
 
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
+console.log("Perplexity key loaded:", !!PERPLEXITY_API_KEY);
 
 const validateEmail = async (email: string): Promise<'valid' | 'soft-fail' | 'invalid' | 'unknown'> => {
   if (!RAPIDAPI_KEY) {
@@ -50,16 +50,16 @@ const validateEmail = async (email: string): Promise<'valid' | 'soft-fail' | 'in
 const buildPrompt = (input: UserInput, excludeCompanies: string[]) => {
   let prompt = `
     SYSTEM: You are Sales Crew AI, a precision-driven B2B sales intelligence and CRM assistant.
-    Your goal is to identify the 10 most likely buyers for a user’s product, validate their contact data with maximum accuracy, and assist in crafting personalized cold-sales outreach.
+    Your goal is to identify the 10 most likely buyers for a user's product, validate their contact data with maximum accuracy, and assist in crafting personalized cold-sales outreach.
     Follow the structured pipeline carefully and never hallucinate information. Return only data that can be reasoned or verified from known, factual context.
-    
+
     For each company, identify the best person to contact (CEO/Founder for SMB, VP/Head for mid-stage, or functional Director for enterprise).
-    
-    CRITICAL EMAIL VALIDATION STEP: You must use your search tool to investigate the most common email format for each company's domain (e.g., firstname.lastname@domain.com, firstinitiallastname@domain.com). Your final output must contain only the single, most likely valid email address. A separate service will perform the final validation check, so your priority is finding the most probable address.
+
+    CRITICAL EMAIL VALIDATION STEP: You must investigate the most common email format for each company's domain (e.g., firstname.lastname@domain.com, firstinitiallastname@domain.com). Your final output must contain only the single, most likely valid email address. A separate service will perform the final validation check, so your priority is finding the most probable address.
 
     For each validated contact, craft 3 unique subject lines and 3 email variants (short, medium, long).
     Personalize the pitch by mentioning the company's mission or recent activity.
-    
+
     STRICT RULES:
     - Do NOT invent company names or people.
     - Only output verifiable or reasoned data. If unknown, output "unknown".
@@ -84,7 +84,7 @@ const buildPrompt = (input: UserInput, excludeCompanies: string[]) => {
 
   prompt += `
 
-    Generate a list of exactly 10 new, relevant companies that are not in the excluded list. Include their best contact and a personalized pitch. Use your tools to find the most up-to-date and accurate information.
+    Generate a list of exactly 10 new, relevant companies that are not in the excluded list. Include their best contact and a personalized pitch. Search for the most up-to-date and accurate information.
 
     Your final output MUST be a single, valid JSON object. Do not include any text, markdown formatting, or code fences (like \`\`\`json) before or after the JSON object.
     The JSON object must have a single key "companies" which is an array of company objects. Each company object must follow this exact structure:
@@ -113,35 +113,46 @@ const buildPrompt = (input: UserInput, excludeCompanies: string[]) => {
   return prompt;
 };
 
+const callPerplexityAPI = async (prompt: string, systemPrompt?: string): Promise<string> => {
+  const messages: Array<{ role: string; content: string }> = [];
+
+  if (systemPrompt) {
+    messages.push({ role: 'system', content: systemPrompt });
+  }
+
+  messages.push({ role: 'user', content: prompt });
+
+  const response = await fetch('https://api.perplexity.ai/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${PERPLEXITY_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'llama-3.1-sonar-large-128k-online',
+      messages: messages,
+      temperature: 0.7,
+      max_tokens: 4000,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Perplexity API error:', response.status, errorText);
+    throw new Error(`Perplexity API error: ${response.status} ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content || '';
+};
+
 export const generateLeadsAndPitches = async (input: UserInput, userLocation: GeolocationCoordinates | null, excludeCompanies: string[] = []): Promise<Company[]> => {
   const prompt = buildPrompt(input, excludeCompanies);
 
-  const tools: any[] = [{ googleSearch: {} }];
-  const toolConfig: any = {};
-
-  if (userLocation) {
-    tools.push({ googleMaps: {} });
-    toolConfig.retrievalConfig = {
-      latLng: {
-        latitude: userLocation.latitude,
-        longitude: userLocation.longitude,
-      },
-    };
-  }
-
   let rawText = '';
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-pro',
-      contents: prompt,
-      config: {
-        thinkingConfig: { thinkingBudget: 32768 },
-        tools: tools,
-        ...(Object.keys(toolConfig).length > 0 && { toolConfig: toolConfig }),
-      },
-    });
+    rawText = await callPerplexityAPI(prompt);
 
-    rawText = response.text.trim();
     const jsonText = rawText.replace(/^```json\n?/, '').replace(/```$/, '').trim();
     const result = JSON.parse(jsonText);
     const companies: Company[] = result.companies || [];
@@ -179,9 +190,9 @@ export const getRolePlayFeedback = async (
 ): Promise<string> => {
   const formattedTranscript = transcript.map(t => `${t.speaker === 'user' ? 'Salesperson' : 'Prospect'}: ${t.text}`).join('\n');
 
-  const prompt = `
-    SYSTEM: You are a world-class B2B sales coach. Your task is to analyze a sales call transcript and provide constructive, actionable feedback.
+  const systemPrompt = `You are a world-class B2B sales coach. Your task is to analyze a sales call transcript and provide constructive, actionable feedback.`;
 
+  const prompt = `
     The salesperson is selling a product with the following details:
     - Product Name: ${userInput?.productName || 'N/A'}
     - Value Proposition: ${userInput?.valueProposition || 'N/A'}
@@ -202,11 +213,8 @@ export const getRolePlayFeedback = async (
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-pro',
-      contents: prompt,
-    });
-    return response.text;
+    const feedback = await callPerplexityAPI(prompt, systemPrompt);
+    return feedback;
   } catch (error) {
     console.error("Error generating feedback:", error);
     return "Sorry, I was unable to generate feedback for this session.";

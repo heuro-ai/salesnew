@@ -5,7 +5,7 @@ import { InputForm } from './components/InputForm';
 import { ResearchResults } from './components/ResearchResults';
 import { CrmTable } from './components/CrmTable';
 import { RolePlay } from './components/RolePlay';
-import { generateLeadsAndPitches } from './services/geminiService';
+import { generateLeadsAndPitches } from './services/perplexityService';
 import { SparklesIcon } from './components/icons';
 
 const NavButton: React.FC<{

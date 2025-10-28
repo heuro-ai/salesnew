@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { GoogleGenAI, LiveSession, LiveServerMessage, Modality } from '@google/genai';
 import type { CrmLead, UserInput } from '../types';
-import { getRolePlayFeedback } from '../services/geminiService';
+import { getRolePlayFeedback } from '../services/perplexityService';
 import { MicIcon, StopIcon } from './icons';
 
 interface RolePlayProps {
@@ -101,8 +101,7 @@ export const RolePlay: React.FC<RolePlayProps> = ({ lead, userInput }) => {
     setFeedback(null);
     setIsSessionActive(true);
 
-    // FIX: Per @google/genai guidelines, use process.env.API_KEY for the API key.
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_PERPLEXITY_API_KEY });
     outputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
     const outputNode = outputAudioContextRef.current.createGain();
     outputNode.connect(outputAudioContextRef.current.destination);
