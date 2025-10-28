@@ -51,36 +51,18 @@ export default function App() {
   const [crmLeads, setCrmLeads] = useState<CrmLead[]>([]);
   const [rolePlayLead, setRolePlayLead] = useState<CrmLead | null>(null);
 
+  const loadCrmLeads = useCallback(async () => {
+    const leads = await getCrmLeads();
+    setCrmLeads(leads);
+  }, []);
+
   useEffect(() => {
     if (user) {
       loadCrmLeads();
     }
-  }, [user]);
+  }, [user, loadCrmLeads]);
 
-  const loadCrmLeads = async () => {
-    const leads = await getCrmLeads();
-    setCrmLeads(leads);
-  };
-
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-center">
-          <svg className="animate-spin h-12 w-12 text-blue-600 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          <p className="text-slate-600">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <AuthForm />;
-  }
-
-  const fetchLeads = async (input: UserInput, existingCompanies: Company[] = []) => {
+  const fetchLeads = useCallback(async (input: UserInput, existingCompanies: Company[] = []) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -108,9 +90,9 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentSearchId]);
 
-  const handleGenerate = async (input: UserInput) => {
+  const handleGenerate = useCallback(async (input: UserInput) => {
     setUserInput(input);
     setCompanies([]);
 
@@ -125,12 +107,12 @@ export default function App() {
     } else {
       setCurrentPage(Page.INPUT);
     }
-  };
+  }, [fetchLeads]);
 
-  const handleGenerateMore = async () => {
+  const handleGenerateMore = useCallback(async () => {
     if (!userInput) return;
     await fetchLeads(userInput, companies);
-  };
+  }, [userInput, companies, fetchLeads]);
 
 
   const handleAddToCrm = useCallback(async (leads: CrmLead[]) => {
@@ -142,7 +124,7 @@ export default function App() {
     }
 
     setCurrentPage(Page.CRM);
-  }, [crmLeads]);
+  }, [crmLeads, loadCrmLeads]);
   
   const handleUpdateLead = useCallback(async (updatedLead: CrmLead) => {
     await updateCrmLead(updatedLead);
@@ -163,9 +145,27 @@ export default function App() {
     setCurrentPage(Page.ROLE_PLAY);
   }, []);
 
-  const navigate = (page: Page) => {
+  const navigate = useCallback((page: Page) => {
     if (page === Page.ROLE_PLAY && !rolePlayLead) return;
     setCurrentPage(page);
+  }, [rolePlayLead]);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <svg className="animate-spin h-12 w-12 text-blue-600 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <p className="text-slate-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthForm />;
   }
 
   const renderContent = () => {
