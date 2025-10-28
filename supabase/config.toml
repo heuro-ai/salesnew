@@ -1,0 +1,15 @@
+[auth]
+# Enable leaked password protection
+# This feature checks user passwords against the HaveIBeenPwned database
+# to prevent the use of compromised passwords
+enable_password_breach_check = true
+
+# Site URL configuration
+site_url = "http://localhost:5173"
+
+# Additional security settings
+enable_signup = true
+enable_anonymous_sign_ins = false
+
+[auth.external]
+# Configure external providers if needed

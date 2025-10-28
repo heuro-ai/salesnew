@@ -34,7 +34,13 @@ export const AuthForm: React.FC = () => {
       if (isSignUp) {
         const { error } = await signUp(email, password);
         if (error) {
-          setError(error.message);
+          if (error.message.includes('password') && error.message.includes('breach')) {
+            setError('This password has been compromised in a data breach and cannot be used. Please choose a different, more secure password.');
+          } else if (error.message.includes('Password should be')) {
+            setError('Password is too weak. Please use a stronger password with a mix of letters, numbers, and symbols.');
+          } else {
+            setError(error.message);
+          }
         } else {
           setSuccessMessage('Account created successfully! You can now sign in.');
           setEmail('');
@@ -45,7 +51,11 @@ export const AuthForm: React.FC = () => {
       } else {
         const { error } = await signIn(email, password);
         if (error) {
-          setError(error.message);
+          if (error.message.includes('Invalid login credentials')) {
+            setError('Invalid email or password. Please check your credentials and try again.');
+          } else {
+            setError(error.message);
+          }
         }
       }
     } catch (err: any) {
