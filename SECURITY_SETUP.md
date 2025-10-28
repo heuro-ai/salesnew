@@ -56,10 +56,18 @@ After enabling this feature:
 3. **Rate Limiting**: Enable rate limiting for authentication endpoints
 4. **MFA**: Consider implementing Multi-Factor Authentication for sensitive operations
 
+## Recent Security Fixes Applied
+
+✅ **RLS Policy Performance Optimization** - Updated policies to use `(select auth.uid())` for better query performance
+✅ **Foreign Key Indexes** - Added covering indexes for all foreign keys to optimize JOIN and constraint check performance
+✅ **Function Search Path** - `update_updated_at_column` function already has secure search_path configuration
+
 ## Current Security Status
 
 ✅ Email/Password authentication enabled
 ✅ Leaked password error handling implemented
+✅ RLS policies optimized for performance
+✅ Foreign key indexes added for optimal query performance
 ⚠️ Leaked password protection - **Requires dashboard configuration**
 ⚠️ Email confirmation - Disabled (can be enabled in Supabase dashboard)
 
