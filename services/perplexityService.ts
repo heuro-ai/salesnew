@@ -2,12 +2,14 @@ import type { UserInput, Company } from '../types';
 
 const RAPIDAPI_KEY = import.meta.env.VITE_RAPIDAPI_KEY;
 const PERPLEXITY_API_KEY = import.meta.env.VITE_PERPLEXITY_API_KEY;
+const PERPLEXITY_FALLBACK_KEY = import.meta.env.VITE_PERPLEXITY_FALLBACK_KEY;
 
-if (!PERPLEXITY_API_KEY) {
-  throw new Error("VITE_PERPLEXITY_API_KEY environment variable not set");
+if (!PERPLEXITY_API_KEY && !PERPLEXITY_FALLBACK_KEY) {
+  throw new Error("VITE_PERPLEXITY_API_KEY or VITE_PERPLEXITY_FALLBACK_KEY environment variable must be set");
 }
 
-console.log("Perplexity key loaded:", !!PERPLEXITY_API_KEY);
+console.log("Perplexity primary key loaded:", !!PERPLEXITY_API_KEY);
+console.log("Perplexity fallback key loaded:", !!PERPLEXITY_FALLBACK_KEY);
 
 const validateEmail = async (email: string): Promise<'valid' | 'soft-fail' | 'invalid' | 'unknown'> => {
   if (!RAPIDAPI_KEY) {
@@ -113,7 +115,7 @@ const buildPrompt = (input: UserInput, excludeCompanies: string[]) => {
   return prompt;
 };
 
-const callPerplexityAPI = async (prompt: string, systemPrompt?: string): Promise<string> => {
+const callPerplexityAPI = async (prompt: string, systemPrompt?: string, useFallback: boolean = false): Promise<string> => {
   const messages: Array<{ role: string; content: string }> = [];
 
   if (systemPrompt) {
@@ -122,10 +124,16 @@ const callPerplexityAPI = async (prompt: string, systemPrompt?: string): Promise
 
   messages.push({ role: 'user', content: prompt });
 
+  const apiKey = useFallback ? PERPLEXITY_FALLBACK_KEY : PERPLEXITY_API_KEY;
+
+  if (!apiKey) {
+    throw new Error(`Perplexity API key not available (fallback: ${useFallback})`);
+  }
+
   const response = await fetch('https://api.perplexity.ai/chat/completions', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${PERPLEXITY_API_KEY}`,
+      'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -139,6 +147,12 @@ const callPerplexityAPI = async (prompt: string, systemPrompt?: string): Promise
   if (!response.ok) {
     const errorText = await response.text();
     console.error('Perplexity API error:', response.status, errorText);
+
+    if (!useFallback && PERPLEXITY_FALLBACK_KEY && (response.status === 429 || response.status === 401 || response.status === 403)) {
+      console.log('Attempting fallback API key...');
+      return callPerplexityAPI(prompt, systemPrompt, true);
+    }
+
     throw new Error(`Perplexity API error: ${response.status} ${response.statusText}`);
   }
 
