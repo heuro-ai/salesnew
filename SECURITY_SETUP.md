@@ -62,6 +62,27 @@ After enabling this feature:
 ✅ **Foreign Key Indexes** - Added covering indexes for all foreign keys to optimize JOIN and constraint check performance
 ✅ **Function Search Path** - `update_updated_at_column` function already has secure search_path configuration
 
+### Important Note About "Unused" Index Warnings
+
+The following indexes may show as "unused" in Supabase dashboard:
+- `payments_user_id_idx`
+- `payments_subscription_id_idx`
+- `subscriptions_user_id_idx`
+
+**These indexes are CRITICAL and must NOT be removed.** They appear unused because:
+1. The tables currently have no data (0 rows)
+2. Index usage statistics only track actual query execution
+3. These indexes are essential for foreign key constraint performance
+4. They will be heavily used once the application has data and active queries
+
+**Why These Indexes Are Essential:**
+- **Foreign Key Performance**: Without indexes on foreign key columns, every INSERT/UPDATE/DELETE operation performs a full table scan to verify referential integrity
+- **JOIN Optimization**: Queries joining payments with subscriptions or users will be significantly slower without these indexes
+- **Scalability**: As data grows, missing foreign key indexes cause exponential performance degradation
+- **Best Practice**: PostgreSQL and database best practices require indexes on all foreign key columns
+
+**Do NOT remove these indexes** - they are critical for production performance and data integrity.
+
 ## Current Security Status
 
 ✅ Email/Password authentication enabled
