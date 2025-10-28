@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import type { Company, CrmLead } from '../types';
 import { ChevronDownIcon, SparklesIcon } from './icons';
+import { ValidationBadge } from './ValidationBadge';
+import { ValidationWarningModal } from './ValidationWarningModal';
 
 interface CompanyCardProps {
   company: Company;
@@ -55,7 +57,10 @@ const CompanyCard: React.FC<CompanyCardProps> = ({ company, isSelected, onSelect
           <div className="px-6 pb-4 border-t border-slate-200 bg-slate-50">
             <p className="mt-4"><strong>Name:</strong> {company.contact.name}</p>
             <p><strong>Title:</strong> {company.contact.title}</p>
-            <p><strong>Email:</strong> {company.contact.validated_email} ({company.contact.validation_status})</p>
+            <div className="flex items-center gap-2 mt-2">
+              <span><strong>Email:</strong> {company.contact.validated_email}</span>
+              <ValidationBadge status={company.contact.validation_status} size="sm" />
+            </div>
           </div>
         )}
       </div>
@@ -102,6 +107,8 @@ interface ResearchResultsProps {
 
 export const ResearchResults: React.FC<ResearchResultsProps> = ({ companies, onAddToCrm, onGenerateMore, isLoading }) => {
   const [selectedCompanies, setSelectedCompanies] = useState<Company[]>([]);
+  const [validationFilter, setValidationFilter] = useState<'all' | 'valid' | 'soft-fail' | 'invalid' | 'unknown'>('all');
+  const [showWarningModal, setShowWarningModal] = useState(false);
 
   const handleSelectCompany = (company: Company) => {
     setSelectedCompanies(prev =>
@@ -110,7 +117,21 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({ companies, onA
         : [...prev, company]
     );
   };
-  
+
+  const handleAddToCrmClick = () => {
+    const hasProblematicEmails = selectedCompanies.some(
+      c => c.contact.validation_status === 'invalid' ||
+           c.contact.validation_status === 'soft-fail' ||
+           c.contact.validation_status === 'unknown'
+    );
+
+    if (hasProblematicEmails) {
+      setShowWarningModal(true);
+    } else {
+      handleAddToCrm();
+    }
+  };
+
   const handleAddToCrm = () => {
     const newLeads: CrmLead[] = selectedCompanies.map(c => ({
       ...c,
@@ -122,6 +143,19 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({ companies, onA
     }));
     onAddToCrm(newLeads);
     setSelectedCompanies([]);
+    setShowWarningModal(false);
+  };
+
+  const filteredCompanies = validationFilter === 'all'
+    ? companies
+    : companies.filter(c => c.contact.validation_status === validationFilter);
+
+  const validationStats = {
+    all: companies.length,
+    valid: companies.filter(c => c.contact.validation_status === 'valid').length,
+    'soft-fail': companies.filter(c => c.contact.validation_status === 'soft-fail').length,
+    invalid: companies.filter(c => c.contact.validation_status === 'invalid').length,
+    unknown: companies.filter(c => c.contact.validation_status === 'unknown').length
   };
 
   return (
@@ -135,8 +169,64 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({ companies, onA
         </p>
       </div>
 
+      <div className="mt-8 flex justify-center">
+        <div className="inline-flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-2 shadow-sm">
+          <span className="text-sm font-medium text-slate-700 mr-2">Filter by email status:</span>
+          <button
+            onClick={() => setValidationFilter('all')}
+            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              validationFilter === 'all'
+                ? 'bg-slate-700 text-white'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            All ({validationStats.all})
+          </button>
+          <button
+            onClick={() => setValidationFilter('valid')}
+            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              validationFilter === 'valid'
+                ? 'bg-green-600 text-white'
+                : 'text-green-700 hover:bg-green-50'
+            }`}
+          >
+            Valid ({validationStats.valid})
+          </button>
+          <button
+            onClick={() => setValidationFilter('soft-fail')}
+            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              validationFilter === 'soft-fail'
+                ? 'bg-yellow-600 text-white'
+                : 'text-yellow-700 hover:bg-yellow-50'
+            }`}
+          >
+            Risky ({validationStats['soft-fail']})
+          </button>
+          <button
+            onClick={() => setValidationFilter('invalid')}
+            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              validationFilter === 'invalid'
+                ? 'bg-red-600 text-white'
+                : 'text-red-700 hover:bg-red-50'
+            }`}
+          >
+            Invalid ({validationStats.invalid})
+          </button>
+          <button
+            onClick={() => setValidationFilter('unknown')}
+            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              validationFilter === 'unknown'
+                ? 'bg-slate-600 text-white'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            Unknown ({validationStats.unknown})
+          </button>
+        </div>
+      </div>
+
       <div className="mt-10 grid gap-8 md:grid-cols-2">
-        {companies.map(company => (
+        {filteredCompanies.map(company => (
           <CompanyCard
             key={company.company}
             company={company}
@@ -145,6 +235,18 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({ companies, onA
           />
         ))}
       </div>
+
+      {filteredCompanies.length === 0 && (
+        <div className="text-center py-12">
+          <p className="text-lg text-slate-600">No companies match the selected filter.</p>
+          <button
+            onClick={() => setValidationFilter('all')}
+            className="mt-4 text-blue-600 hover:text-blue-800 font-medium"
+          >
+            Clear filter
+          </button>
+        </div>
+      )}
 
       {companies.length > 0 && (
          <div className="sticky bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-sm border-t border-slate-200 mt-8">
@@ -172,15 +274,23 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({ companies, onA
             <div className="flex items-center">
               <span className="mr-4 text-lg font-medium text-slate-700">{selectedCompanies.length} selected</span>
               <button
-                onClick={handleAddToCrm}
+                onClick={handleAddToCrmClick}
                 disabled={selectedCompanies.length === 0}
-                className="inline-flex items-center rounded-md border border-transparent bg-indigo-600 px-6 py-3 text-base font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:bg-indigo-300 disabled:cursor-not-allowed"
+                className="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-6 py-3 text-base font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-blue-300 disabled:cursor-not-allowed"
               >
                 Add to CRM
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {showWarningModal && (
+        <ValidationWarningModal
+          selectedCompanies={selectedCompanies}
+          onConfirm={handleAddToCrm}
+          onCancel={() => setShowWarningModal(false)}
+        />
       )}
     </div>
   );

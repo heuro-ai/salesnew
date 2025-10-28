@@ -1,6 +1,6 @@
 import type { UserInput, Company } from '../types';
+import { validateEmail } from './emailValidationService';
 
-const RAPIDAPI_KEY = import.meta.env.VITE_RAPIDAPI_KEY;
 const PERPLEXITY_API_KEY = import.meta.env.VITE_PERPLEXITY_API_KEY;
 const PERPLEXITY_FALLBACK_KEY = import.meta.env.VITE_PERPLEXITY_FALLBACK_KEY;
 
@@ -10,44 +10,6 @@ if (!PERPLEXITY_API_KEY && !PERPLEXITY_FALLBACK_KEY) {
 
 console.log("Perplexity primary key loaded:", !!PERPLEXITY_API_KEY);
 console.log("Perplexity fallback key loaded:", !!PERPLEXITY_FALLBACK_KEY);
-
-const validateEmail = async (email: string): Promise<'valid' | 'soft-fail' | 'invalid' | 'unknown'> => {
-  if (!RAPIDAPI_KEY) {
-    console.warn("RAPIDAPI_KEY not found. Skipping email validation.");
-    return 'unknown';
-  }
-
-  const url = `https://validect-email-verification-v1.p.rapidapi.com/v1/verify?email=${encodeURIComponent(email)}`;
-  const options = {
-    method: 'GET',
-    headers: {
-      'x-rapidapi-host': 'validect-email-verification-v1.p.rapidapi.com',
-      'x-rapidapi-key': RAPIDAPI_KEY
-    }
-  };
-
-  try {
-    const response = await fetch(url, options);
-    if (!response.ok) {
-        console.error('Email validation API error:', response.status, response.statusText);
-        return 'soft-fail';
-    }
-    const result = await response.json();
-    switch (result.status) {
-        case 'valid':
-            return 'valid';
-        case 'risky':
-            return 'soft-fail';
-        case 'invalid':
-            return 'invalid';
-        default:
-            return 'unknown';
-    }
-  } catch (error) {
-    console.error('Failed to validate email:', error);
-    return 'soft-fail';
-  }
-};
 
 const buildPrompt = (input: UserInput, excludeCompanies: string[]) => {
   let prompt = `
