@@ -116,18 +116,15 @@ const buildPrompt = (input: UserInput, excludeCompanies: string[]) => {
 };
 
 const callPerplexityAPI = async (prompt: string, systemPrompt?: string, useFallback: boolean = false): Promise<string> => {
-  const messages: Array<{ role: string; content: string }> = [];
-
-  if (systemPrompt) {
-    messages.push({ role: 'system', content: systemPrompt });
-  }
-
-  messages.push({ role: 'user', content: prompt });
-
   const apiKey = useFallback ? PERPLEXITY_FALLBACK_KEY : PERPLEXITY_API_KEY;
 
   if (!apiKey) {
     throw new Error(`Perplexity API key not available (fallback: ${useFallback})`);
+  }
+
+  let combinedPrompt = prompt;
+  if (systemPrompt) {
+    combinedPrompt = `${systemPrompt}\n\n${prompt}`;
   }
 
   const response = await fetch('https://api.perplexity.ai/chat/completions', {
@@ -138,7 +135,12 @@ const callPerplexityAPI = async (prompt: string, systemPrompt?: string, useFallb
     },
     body: JSON.stringify({
       model: 'llama-3.1-sonar-large-128k-online',
-      messages: messages,
+      messages: [
+        {
+          role: 'user',
+          content: combinedPrompt
+        }
+      ],
       temperature: 0.7,
       max_tokens: 4000,
     }),
@@ -148,7 +150,7 @@ const callPerplexityAPI = async (prompt: string, systemPrompt?: string, useFallb
     const errorText = await response.text();
     console.error('Perplexity API error:', response.status, errorText);
 
-    if (!useFallback && PERPLEXITY_FALLBACK_KEY && (response.status === 429 || response.status === 401 || response.status === 403)) {
+    if (!useFallback && PERPLEXITY_FALLBACK_KEY && (response.status === 429 || response.status === 401 || response.status === 403 || response.status === 400)) {
       console.log('Attempting fallback API key...');
       return callPerplexityAPI(prompt, systemPrompt, true);
     }
