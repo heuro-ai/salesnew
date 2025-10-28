@@ -168,6 +168,11 @@ const validateViaAPI = async (email: string): Promise<ValidationResult> => {
       const errorText = await response.text();
       console.error('Email validation API error:', response.status, errorText);
 
+      if (response.status === 429) {
+        console.warn('Rate limit exceeded, falling back to regex validation');
+        return validateViaRegex(email);
+      }
+
       return {
         email,
         status: 'unknown',
@@ -209,13 +214,8 @@ const validateViaAPI = async (email: string): Promise<ValidationResult> => {
     };
   } catch (error) {
     console.error('Failed to validate email via API:', error);
-    return {
-      email,
-      status: 'unknown',
-      method: 'regex',
-      confidence: 30,
-      message: 'API request failed'
-    };
+    console.warn('Falling back to regex validation');
+    return validateViaRegex(email);
   }
 };
 
