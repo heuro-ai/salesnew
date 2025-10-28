@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { CrmLead } from '../types';
 import { ValidationBadge } from './ValidationBadge';
+import { QualityScore } from './QualityScore';
 
 interface CrmTableProps {
   leads: CrmLead[];
@@ -121,6 +122,7 @@ export const CrmTable: React.FC<CrmTableProps> = ({ leads, onUpdateLead, onDelet
                     <tr>
                       <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">Company</th>
                       <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Contact</th>
+                      <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Quality</th>
                       <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Status</th>
                       <th scope="col" className="px-3 py-3.5 text-center text-sm font-semibold text-gray-900">Sent</th>
                       <th scope="col" className="px-3 py-3.5 text-center text-sm font-semibold text-gray-900">Reply</th>
@@ -148,6 +150,13 @@ export const CrmTable: React.FC<CrmTableProps> = ({ leads, onUpdateLead, onDelet
                             <span className="text-xs text-gray-500">{lead.contact.validated_email}</span>
                             <ValidationBadge status={lead.contact.validation_status} size="sm" showLabel={false} />
                           </div>
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-4 text-sm">
+                          {lead.quality_score !== undefined ? (
+                            <QualityScore score={lead.quality_score} size="sm" showLabel={false} />
+                          ) : (
+                            <span className="text-gray-400 text-xs">N/A</span>
+                          )}
                         </td>
                         <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                           <div className="flex items-center gap-2">

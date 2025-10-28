@@ -92,18 +92,31 @@ export const saveCompanies = async (searchId: string, companies: Company[]): Pro
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return false;
 
-  const companiesToInsert = companies.map(company => ({
-    search_id: searchId,
-    user_id: user.id,
-    company_name: company.company,
-    website: company.website,
-    industry: company.industry,
-    reason_for_fit: company.reason_for_fit,
-    confidence_score: company.confidence_score,
-    likely_to_buy: company.likely_to_buy,
-    contact_data: company.contact,
-    pitch_data: company.pitch,
-  }));
+  const companiesToInsert = companies.map(company => {
+    const validationScore = company.contact.validation_status === 'valid' ? 100 :
+                           company.contact.validation_status === 'soft-fail' ? 50 :
+                           company.contact.validation_status === 'invalid' ? 0 : 25;
+    const buyingScore = company.likely_to_buy === 'High' ? 100 :
+                       company.likely_to_buy === 'Medium' ? 60 :
+                       company.likely_to_buy === 'Low' ? 30 : 0;
+    const qualityScore = Math.round(
+      (company.confidence_score * 0.4) + (validationScore * 0.35) + (buyingScore * 0.25)
+    );
+
+    return {
+      search_id: searchId,
+      user_id: user.id,
+      company_name: company.company,
+      website: company.website,
+      industry: company.industry,
+      reason_for_fit: company.reason_for_fit,
+      confidence_score: company.confidence_score,
+      likely_to_buy: company.likely_to_buy,
+      contact_data: company.contact,
+      pitch_data: company.pitch,
+      quality_score: qualityScore,
+    };
+  });
 
   const { error } = await supabase
     .from('companies')
@@ -163,26 +176,40 @@ export const getCompaniesForSearch = async (searchId: string): Promise<Company[]
   }));
 };
 
-export const saveCrmLeads = async (leads: CrmLead[]): Promise<boolean> => {
+export const saveCrmLeads = async (leads: CrmLead[], searchId?: string): Promise<boolean> => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return false;
 
-  const leadsToInsert = leads.map(lead => ({
-    user_id: user.id,
-    company_name: lead.company,
-    website: lead.website,
-    industry: lead.industry,
-    reason_for_fit: lead.reason_for_fit,
-    confidence_score: lead.confidence_score,
-    likely_to_buy: lead.likely_to_buy,
-    contact_data: lead.contact,
-    pitch_data: lead.pitch,
-    status: lead.status,
-    last_contacted: lead.lastContacted,
-    email_sent: lead.emailSent,
-    reply_received: lead.replyReceived,
-    notes: '',
-  }));
+  const leadsToInsert = leads.map(lead => {
+    const validationScore = lead.contact.validation_status === 'valid' ? 100 :
+                           lead.contact.validation_status === 'soft-fail' ? 50 :
+                           lead.contact.validation_status === 'invalid' ? 0 : 25;
+    const buyingScore = lead.likely_to_buy === 'High' ? 100 :
+                       lead.likely_to_buy === 'Medium' ? 60 :
+                       lead.likely_to_buy === 'Low' ? 30 : 0;
+    const qualityScore = Math.round(
+      (lead.confidence_score * 0.4) + (validationScore * 0.35) + (buyingScore * 0.25)
+    );
+
+    return {
+      user_id: user.id,
+      company_name: lead.company,
+      website: lead.website,
+      industry: lead.industry,
+      reason_for_fit: lead.reason_for_fit,
+      confidence_score: lead.confidence_score,
+      likely_to_buy: lead.likely_to_buy,
+      contact_data: lead.contact,
+      pitch_data: lead.pitch,
+      status: lead.status,
+      last_contacted: lead.lastContacted,
+      email_sent: lead.emailSent,
+      reply_received: lead.replyReceived,
+      notes: '',
+      quality_score: qualityScore,
+      source_search_id: searchId || null,
+    };
+  });
 
   const { error } = await supabase
     .from('crm_leads')

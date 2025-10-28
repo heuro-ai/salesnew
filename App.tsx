@@ -17,6 +17,9 @@ import {
   updateCrmLead,
   deleteCrmLead
 } from './services/databaseService';
+import { recordSearchAnalytics } from './services/searchAnalyticsService';
+import { getExcludedCompanyNames } from './services/excludedCompaniesService';
+import { calculateCompanyQualityScore } from './services/leadScoringService';
 
 const NavButton: React.FC<{
   label: string;
@@ -45,6 +48,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentSearchId, setCurrentSearchId] = useState<string | null>(null);
+  const [searchStartTime, setSearchStartTime] = useState<number>(0);
 
   const [userInput, setUserInput] = useState<UserInput | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -65,6 +69,9 @@ export default function App() {
   const fetchLeads = useCallback(async (input: UserInput, existingCompanies: Company[] = []) => {
     setIsLoading(true);
     setError(null);
+    const startTime = Date.now();
+    setSearchStartTime(startTime);
+
     try {
       const userLocation = await new Promise<GeolocationCoordinates | null>((resolve) => {
         navigator.geolocation.getCurrentPosition(
@@ -75,12 +82,23 @@ export default function App() {
           }
         );
       });
-      const excludeCompanyNames = existingCompanies.map(c => c.company);
-      const results = await generateLeadsAndPitches(input, userLocation, excludeCompanyNames);
-      setCompanies(prev => [...prev, ...results]);
 
-      if (currentSearchId && results.length > 0) {
-        await saveCompanies(currentSearchId, results);
+      const excludeCompanyNames = existingCompanies.map(c => c.company);
+      const excludedCompanies = await getExcludedCompanyNames();
+      const results = await generateLeadsAndPitches(input, userLocation, excludeCompanyNames, excludedCompanies);
+
+      const resultsWithQualityScore = results.map(company => ({
+        ...company,
+        quality_score: calculateCompanyQualityScore(company)
+      })) as Company[];
+
+      setCompanies(prev => [...prev, ...resultsWithQualityScore]);
+
+      if (currentSearchId && resultsWithQualityScore.length > 0) {
+        await saveCompanies(currentSearchId, resultsWithQualityScore);
+
+        const duration = Math.round((Date.now() - startTime) / 1000);
+        await recordSearchAnalytics(currentSearchId, resultsWithQualityScore, duration);
       }
 
       return true;
@@ -119,12 +137,12 @@ export default function App() {
     const newLeads = leads.filter(l => !crmLeads.some(pl => pl.company === l.company));
 
     if (newLeads.length > 0) {
-      await saveCrmLeads(newLeads);
+      await saveCrmLeads(newLeads, currentSearchId || undefined);
       await loadCrmLeads();
     }
 
     setCurrentPage(Page.CRM);
-  }, [crmLeads, loadCrmLeads]);
+  }, [crmLeads, loadCrmLeads, currentSearchId]);
   
   const handleUpdateLead = useCallback(async (updatedLead: CrmLead) => {
     await updateCrmLead(updatedLead);

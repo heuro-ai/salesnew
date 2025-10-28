@@ -42,6 +42,7 @@ export interface Company {
   likely_to_buy: 'High' | 'Medium' | 'Low' | 'unknown';
   contact: Contact;
   pitch: Pitch;
+  quality_score?: number;
 }
 
 export interface CrmLead extends Company {

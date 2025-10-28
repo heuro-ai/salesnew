@@ -3,7 +3,9 @@ import type { Company, CrmLead } from '../types';
 import { ChevronDownIcon, SparklesIcon } from './icons';
 import { ValidationBadge } from './ValidationBadge';
 import { ValidationWarningModal } from './ValidationWarningModal';
+import { QualityScore } from './QualityScore';
 import { normalizeUrl } from '../utils/urlUtils';
+import { sortLeadsByQuality, filterLeadsByQualityRange } from '../services/leadScoringService';
 
 interface CompanyCardProps {
   company: Company;
@@ -27,16 +29,21 @@ const CompanyCard: React.FC<CompanyCardProps> = ({ company, isSelected, onSelect
             <a href={normalizeUrl(company.website)} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:text-indigo-800">
               {company.website}
             </a>
-            <div className={`mt-2 text-xs font-semibold inline-flex items-center px-2.5 py-0.5 rounded-full ${
-              company.likely_to_buy === 'High' ? 'bg-green-100 text-green-800' : 
-              company.likely_to_buy === 'Medium' ? 'bg-yellow-100 text-yellow-800' : 
-              'bg-red-100 text-red-800'
-            }`}>
-              Likely to Buy: {company.likely_to_buy}
+            <div className="mt-2 flex items-center gap-2">
+              {company.quality_score !== undefined && (
+                <QualityScore score={company.quality_score} size="sm" />
+              )}
+              <div className={`text-xs font-semibold inline-flex items-center px-2.5 py-0.5 rounded-full ${
+                company.likely_to_buy === 'High' ? 'bg-green-100 text-green-800' :
+                company.likely_to_buy === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
+                'bg-red-100 text-red-800'
+              }`}>
+                {company.likely_to_buy} Intent
+              </div>
             </div>
           </div>
-          <div className="flex items-center">
-            <span className="text-sm font-medium text-slate-600 mr-4">Confidence: {company.confidence_score}%</span>
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-slate-600">Confidence: {company.confidence_score}%</span>
             <input
               type="checkbox"
               checked={isSelected}
@@ -111,6 +118,8 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({ companies, onA
   const [validationFilter, setValidationFilter] = useState<'all' | 'valid' | 'soft-fail' | 'invalid' | 'unknown'>('all');
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [compactView, setCompactView] = useState(false);
+  const [sortBy, setSortBy] = useState<'quality' | 'confidence' | 'default'>('quality');
+  const [qualityRange, setQualityRange] = useState<[number, number]>([0, 100]);
 
   const handleSelectCompany = (company: Company) => {
     setSelectedCompanies(prev =>
@@ -156,9 +165,17 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({ companies, onA
     setShowWarningModal(false);
   };
 
-  const filteredCompanies = validationFilter === 'all'
+  let filteredCompanies = validationFilter === 'all'
     ? companies
     : companies.filter(c => c.contact.validation_status === validationFilter);
+
+  filteredCompanies = filterLeadsByQualityRange(filteredCompanies, qualityRange[0], qualityRange[1]);
+
+  if (sortBy === 'quality') {
+    filteredCompanies = sortLeadsByQuality(filteredCompanies, 'desc');
+  } else if (sortBy === 'confidence') {
+    filteredCompanies = [...filteredCompanies].sort((a, b) => b.confidence_score - a.confidence_score);
+  }
 
   const validationStats = {
     all: companies.length,
@@ -202,7 +219,57 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({ companies, onA
         </div>
       </div>
 
-      <div className="mt-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="mt-8 space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="inline-flex flex-wrap items-center gap-2 bg-white border border-slate-200 rounded-lg p-2 shadow-sm">
+            <span className="text-sm font-medium text-slate-700 mr-2">Sort by:</span>
+            <button
+              onClick={() => setSortBy('quality')}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                sortBy === 'quality'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              Quality Score
+            </button>
+            <button
+              onClick={() => setSortBy('confidence')}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                sortBy === 'confidence'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              Confidence
+            </button>
+            <button
+              onClick={() => setSortBy('default')}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                sortBy === 'default'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              Default
+            </button>
+          </div>
+          <div className="inline-flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-2 shadow-sm">
+            <button
+              onClick={handleSelectAll}
+              className="px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+            >
+              Select All ({filteredCompanies.length})
+            </button>
+            <button
+              onClick={handleDeselectAll}
+              className="px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-md transition-colors"
+            >
+              Clear Selection
+            </button>
+          </div>
+        </div>
+
         <div className="inline-flex flex-wrap items-center gap-2 bg-white border border-slate-200 rounded-lg p-2 shadow-sm">
           <span className="text-sm font-medium text-slate-700 mr-2">Email status:</span>
           <button
@@ -256,20 +323,6 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({ companies, onA
             Unknown ({validationStats.unknown})
           </button>
         </div>
-        <div className="inline-flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-2 shadow-sm">
-          <button
-            onClick={handleSelectAll}
-            className="px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
-          >
-            Select All ({filteredCompanies.length})
-          </button>
-          <button
-            onClick={handleDeselectAll}
-            className="px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-md transition-colors"
-          >
-            Clear Selection
-          </button>
-        </div>
       </div>
 
       <div className={`mt-10 ${compactView ? 'space-y-3' : 'grid gap-8 md:grid-cols-2'}`}>
@@ -291,8 +344,11 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({ companies, onA
                 className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <h3 className="text-lg font-semibold text-slate-900 truncate">{company.company}</h3>
+                  {company.quality_score !== undefined && (
+                    <QualityScore score={company.quality_score} size="sm" showLabel={false} />
+                  )}
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                     company.likely_to_buy === 'High' ? 'bg-green-100 text-green-800' :
                     company.likely_to_buy === 'Medium' ? 'bg-yellow-100 text-yellow-800' :

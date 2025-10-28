@@ -131,13 +131,14 @@ const callPerplexityAPI = async (prompt: string, systemPrompt?: string, useFallb
   return data.choices?.[0]?.message?.content || '';
 };
 
-export const generateLeadsAndPitches = async (input: UserInput, userLocation: GeolocationCoordinates | null, excludeCompanies: string[] = []): Promise<Company[]> => {
+export const generateLeadsAndPitches = async (input: UserInput, userLocation: GeolocationCoordinates | null, excludeCompanies: string[] = [], additionalExcluded: string[] = []): Promise<Company[]> => {
   const maxRetries = 2;
   let retryCount = 0;
   let invalidEmails: string[] = [];
+  const allExcluded = [...excludeCompanies, ...additionalExcluded];
 
   while (retryCount <= maxRetries) {
-    const prompt = buildPrompt(input, excludeCompanies, invalidEmails);
+    const prompt = buildPrompt(input, allExcluded, invalidEmails);
 
     let rawText = '';
     try {
