@@ -61,7 +61,7 @@ const buildPrompt = (input: UserInput, excludeCompanies: string[], invalidEmails
     The JSON object must have a single key "companies" which is an array of company objects. Each company object must follow this exact structure:
     {
       "company": "string",
-      "website": "string",
+      "website": "string (must include protocol: http:// or https://)",
       "industry": "string",
       "reason_for_fit": "string",
       "confidence_score": number (0-100),

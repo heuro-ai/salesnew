@@ -3,6 +3,7 @@ import type { Company, CrmLead } from '../types';
 import { ChevronDownIcon, SparklesIcon } from './icons';
 import { ValidationBadge } from './ValidationBadge';
 import { ValidationWarningModal } from './ValidationWarningModal';
+import { normalizeUrl } from '../utils/urlUtils';
 
 interface CompanyCardProps {
   company: Company;
@@ -23,7 +24,7 @@ const CompanyCard: React.FC<CompanyCardProps> = ({ company, isSelected, onSelect
         <div className="flex justify-between items-start">
           <div>
             <h3 className="text-xl font-bold text-slate-900">{company.company}</h3>
-            <a href={company.website} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:text-indigo-800">
+            <a href={normalizeUrl(company.website)} target="_blank" rel="noopener noreferrer" className="text-sm text-indigo-600 hover:text-indigo-800">
               {company.website}
             </a>
             <div className={`mt-2 text-xs font-semibold inline-flex items-center px-2.5 py-0.5 rounded-full ${
