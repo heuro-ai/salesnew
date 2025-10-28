@@ -110,6 +110,7 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({ companies, onA
   const [selectedCompanies, setSelectedCompanies] = useState<Company[]>([]);
   const [validationFilter, setValidationFilter] = useState<'all' | 'valid' | 'soft-fail' | 'invalid' | 'unknown'>('all');
   const [showWarningModal, setShowWarningModal] = useState(false);
+  const [compactView, setCompactView] = useState(false);
 
   const handleSelectCompany = (company: Company) => {
     setSelectedCompanies(prev =>
@@ -117,6 +118,14 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({ companies, onA
         ? prev.filter(c => c.company !== company.company)
         : [...prev, company]
     );
+  };
+
+  const handleSelectAll = () => {
+    setSelectedCompanies(filteredCompanies);
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedCompanies([]);
   };
 
   const handleAddToCrmClick = () => {
@@ -163,16 +172,39 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({ companies, onA
     <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
       <div className="text-center">
          <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-          Prospecting Results
+          Your Leads
         </h1>
         <p className="mt-4 text-lg text-slate-600">
-          Here are {companies.length} highly-qualified leads tailored to your product. Select the best fits to add to your CRM.
+          We found {companies.length} companies that match your product. Select the ones you want to pursue.
         </p>
+        <div className="mt-4 flex items-center justify-center gap-3">
+          <span className="text-sm text-slate-600">View:</span>
+          <button
+            onClick={() => setCompactView(false)}
+            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              !compactView
+                ? 'bg-blue-600 text-white'
+                : 'text-slate-600 hover:bg-slate-100 border border-slate-300'
+            }`}
+          >
+            Detailed Cards
+          </button>
+          <button
+            onClick={() => setCompactView(true)}
+            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              compactView
+                ? 'bg-blue-600 text-white'
+                : 'text-slate-600 hover:bg-slate-100 border border-slate-300'
+            }`}
+          >
+            Compact List
+          </button>
+        </div>
       </div>
 
-      <div className="mt-8 flex justify-center">
-        <div className="inline-flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-2 shadow-sm">
-          <span className="text-sm font-medium text-slate-700 mr-2">Filter by email status:</span>
+      <div className="mt-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="inline-flex flex-wrap items-center gap-2 bg-white border border-slate-200 rounded-lg p-2 shadow-sm">
+          <span className="text-sm font-medium text-slate-700 mr-2">Email status:</span>
           <button
             onClick={() => setValidationFilter('all')}
             className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
@@ -224,16 +256,68 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({ companies, onA
             Unknown ({validationStats.unknown})
           </button>
         </div>
+        <div className="inline-flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-2 shadow-sm">
+          <button
+            onClick={handleSelectAll}
+            className="px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+          >
+            Select All ({filteredCompanies.length})
+          </button>
+          <button
+            onClick={handleDeselectAll}
+            className="px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-md transition-colors"
+          >
+            Clear Selection
+          </button>
+        </div>
       </div>
 
-      <div className="mt-10 grid gap-8 md:grid-cols-2">
+      <div className={`mt-10 ${compactView ? 'space-y-3' : 'grid gap-8 md:grid-cols-2'}`}>
         {filteredCompanies.map(company => (
-          <CompanyCard
-            key={company.company}
-            company={company}
-            isSelected={selectedCompanies.some(c => c.company === company.company)}
-            onSelect={handleSelectCompany}
-          />
+          compactView ? (
+            <div
+              key={company.company}
+              className={`bg-white border rounded-lg p-4 flex items-center gap-4 cursor-pointer transition-all hover:shadow-md ${
+                selectedCompanies.some(c => c.company === company.company)
+                  ? 'border-blue-500 bg-blue-50'
+                  : 'border-slate-200'
+              }`}
+              onClick={() => handleSelectCompany(company)}
+            >
+              <input
+                type="checkbox"
+                checked={selectedCompanies.some(c => c.company === company.company)}
+                onChange={() => {}}
+                className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="text-lg font-semibold text-slate-900 truncate">{company.company}</h3>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                    company.likely_to_buy === 'High' ? 'bg-green-100 text-green-800' :
+                    company.likely_to_buy === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-red-100 text-red-800'
+                  }`}>
+                    {company.likely_to_buy}
+                  </span>
+                  <ValidationBadge status={company.contact.validation_status} size="sm" />
+                </div>
+                <p className="text-sm text-slate-600 line-clamp-2">{company.reason_for_fit}</p>
+                <div className="mt-2 flex items-center gap-4 text-xs text-slate-500">
+                  <span>Confidence: {company.confidence_score}%</span>
+                  <span>•</span>
+                  <span>{company.contact.name} - {company.contact.title}</span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <CompanyCard
+              key={company.company}
+              company={company}
+              isSelected={selectedCompanies.some(c => c.company === company.company)}
+              onSelect={handleSelectCompany}
+            />
+          )
         ))}
       </div>
 
@@ -255,7 +339,7 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({ companies, onA
              <button
               onClick={onGenerateMore}
               disabled={isLoading}
-              className="inline-flex items-center rounded-md border border-slate-300 bg-white px-6 py-3 text-base font-medium text-slate-700 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:bg-slate-100 disabled:cursor-not-allowed"
+              className="inline-flex items-center rounded-md border border-slate-300 bg-white px-6 py-3 text-base font-medium text-slate-700 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-slate-100 disabled:cursor-not-allowed"
             >
                {isLoading ? (
                 <>
@@ -268,7 +352,7 @@ export const ResearchResults: React.FC<ResearchResultsProps> = ({ companies, onA
               ) : (
                 <>
                   <SparklesIcon className="w-5 h-5 mr-2" />
-                  Generate More
+                  Generate 5 More Leads
                 </>
               )}
             </button>

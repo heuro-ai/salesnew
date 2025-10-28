@@ -11,6 +11,10 @@ export const AuthForm: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  const passwordRequirements = [
+    { label: 'At least 6 characters', met: password.length >= 6 },
+  ];
+
   const { signUp, signIn } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -42,11 +46,14 @@ export const AuthForm: React.FC = () => {
             setError(error.message);
           }
         } else {
-          setSuccessMessage('Account created successfully! You can now sign in.');
-          setEmail('');
-          setPassword('');
-          setConfirmPassword('');
-          setIsSignUp(false);
+          setSuccessMessage('Account created successfully! Signing you in...');
+          setTimeout(async () => {
+            const { error: signInError } = await signIn(email, password);
+            if (signInError) {
+              setError('Account created but auto-login failed. Please sign in manually.');
+              setIsSignUp(false);
+            }
+          }, 500);
         }
       } else {
         const { error } = await signIn(email, password);
@@ -73,7 +80,34 @@ export const AuthForm: React.FC = () => {
             <SparklesIcon className="h-16 w-16 text-blue-600" />
           </div>
           <h1 className="text-4xl font-bold text-slate-900 mb-2">Sales Crew AI</h1>
-          <p className="text-slate-600">Your intelligent B2B sales assistant</p>
+          <p className="text-slate-600 mb-6">Your intelligent B2B sales assistant</p>
+
+          <div className="bg-white/60 backdrop-blur-sm rounded-lg p-4 text-left space-y-2">
+            <div className="flex items-start gap-2 text-sm text-slate-700">
+              <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <span>AI-powered lead generation tailored to your product</span>
+            </div>
+            <div className="flex items-start gap-2 text-sm text-slate-700">
+              <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <span>Verified contact emails with deliverability scores</span>
+            </div>
+            <div className="flex items-start gap-2 text-sm text-slate-700">
+              <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <span>Practice sales calls with AI role-play simulation</span>
+            </div>
+            <div className="flex items-start gap-2 text-sm text-slate-700">
+              <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <span>Manage your pipeline with an integrated CRM</span>
+            </div>
+          </div>
         </div>
 
         <div className="bg-white shadow-xl rounded-lg p-8">
@@ -151,6 +185,24 @@ export const AuthForm: React.FC = () => {
                 className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="••••••••"
               />
+              {isSignUp && password && (
+                <div className="mt-2 space-y-1">
+                  {passwordRequirements.map((req, idx) => (
+                    <div key={idx} className="flex items-center gap-2 text-xs">
+                      {req.met ? (
+                        <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4 text-slate-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                      <span className={req.met ? 'text-green-700' : 'text-slate-500'}>{req.label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {isSignUp && (

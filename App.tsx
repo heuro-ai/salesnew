@@ -9,6 +9,14 @@ import { AuthForm } from './components/AuthForm';
 import { generateLeadsAndPitches } from './services/perplexityService';
 import { SparklesIcon } from './components/icons';
 import { useAuth } from './contexts/AuthContext';
+import {
+  saveUserSearch,
+  saveCompanies,
+  getCrmLeads,
+  saveCrmLeads,
+  updateCrmLead,
+  deleteCrmLead
+} from './services/databaseService';
 
 const NavButton: React.FC<{
   label: string;
@@ -22,9 +30,9 @@ const NavButton: React.FC<{
     disabled={disabled}
     className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
       currentPage === page
-        ? 'bg-indigo-600 text-white'
-        : 'text-slate-600 hover:bg-slate-200'
-    } disabled:text-slate-400 disabled:bg-slate-100 disabled:cursor-not-allowed`}
+        ? 'bg-blue-600 text-white'
+        : 'text-slate-600 hover:bg-slate-100'
+    } disabled:text-slate-400 disabled:bg-slate-50 disabled:cursor-not-allowed`}
   >
     {label}
   </button>
@@ -36,11 +44,23 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>(Page.INPUT);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentSearchId, setCurrentSearchId] = useState<string | null>(null);
 
   const [userInput, setUserInput] = useState<UserInput | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [crmLeads, setCrmLeads] = useState<CrmLead[]>([]);
   const [rolePlayLead, setRolePlayLead] = useState<CrmLead | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      loadCrmLeads();
+    }
+  }, [user]);
+
+  const loadCrmLeads = async () => {
+    const leads = await getCrmLeads();
+    setCrmLeads(leads);
+  };
 
   if (authLoading) {
     return (
@@ -67,12 +87,20 @@ export default function App() {
       const userLocation = await new Promise<GeolocationCoordinates | null>((resolve) => {
         navigator.geolocation.getCurrentPosition(
           (position) => resolve(position.coords),
-          () => resolve(null) // Resolve with null on error/denial
+          () => {
+            setError('Location access denied. Results may be less accurate.');
+            resolve(null);
+          }
         );
       });
       const excludeCompanyNames = existingCompanies.map(c => c.company);
       const results = await generateLeadsAndPitches(input, userLocation, excludeCompanyNames);
       setCompanies(prev => [...prev, ...results]);
+
+      if (currentSearchId && results.length > 0) {
+        await saveCompanies(currentSearchId, results);
+      }
+
       return true;
     } catch (err: any) {
       setError(err.message || 'An unknown error occurred.');
@@ -84,7 +112,13 @@ export default function App() {
 
   const handleGenerate = async (input: UserInput) => {
     setUserInput(input);
-    setCompanies([]); // Reset companies for a new search
+    setCompanies([]);
+
+    const searchId = await saveUserSearch(input);
+    if (searchId) {
+      setCurrentSearchId(searchId);
+    }
+
     const success = await fetchLeads(input);
     if (success) {
       setCurrentPage(Page.RESEARCH);
@@ -99,17 +133,30 @@ export default function App() {
   };
 
 
-  const handleAddToCrm = useCallback((leads: CrmLead[]) => {
-    setCrmLeads(prev => {
-      const newLeads = leads.filter(l => !prev.some(pl => pl.company === l.company));
-      return [...prev, ...newLeads];
-    });
+  const handleAddToCrm = useCallback(async (leads: CrmLead[]) => {
+    const newLeads = leads.filter(l => !crmLeads.some(pl => pl.company === l.company));
+
+    if (newLeads.length > 0) {
+      await saveCrmLeads(newLeads);
+      await loadCrmLeads();
+    }
+
     setCurrentPage(Page.CRM);
-  }, []);
+  }, [crmLeads]);
   
-  const handleUpdateLead = useCallback((updatedLead: CrmLead) => {
+  const handleUpdateLead = useCallback(async (updatedLead: CrmLead) => {
+    await updateCrmLead(updatedLead);
     setCrmLeads(prev => prev.map(l => l.id === updatedLead.id ? updatedLead : l));
   }, []);
+
+  const handleDeleteLead = useCallback(async (leadId: string) => {
+    await deleteCrmLead(leadId);
+    setCrmLeads(prev => prev.filter(l => l.id !== leadId));
+    if (rolePlayLead?.id === leadId) {
+      setRolePlayLead(null);
+      setCurrentPage(Page.CRM);
+    }
+  }, [rolePlayLead]);
 
   const handleStartRolePlay = useCallback((lead: CrmLead) => {
     setRolePlayLead(lead);
@@ -128,7 +175,7 @@ export default function App() {
       case Page.RESEARCH:
         return <ResearchResults companies={companies} onAddToCrm={handleAddToCrm} onGenerateMore={handleGenerateMore} isLoading={isLoading} />;
       case Page.CRM:
-        return <CrmTable leads={crmLeads} onUpdateLead={handleUpdateLead} onStartRolePlay={handleStartRolePlay} />;
+        return <CrmTable leads={crmLeads} onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead} onStartRolePlay={handleStartRolePlay} />;
       case Page.ROLE_PLAY:
         return rolePlayLead ? <RolePlay lead={rolePlayLead} userInput={userInput} /> : <p>No lead selected for role-play.</p>;
       default:
@@ -141,15 +188,15 @@ export default function App() {
       <header className="bg-white shadow-sm sticky top-0 z-10">
         <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center">
           <div className="flex items-center space-x-2">
-            <SparklesIcon className="h-8 w-8 text-indigo-600" />
+            <SparklesIcon className="h-8 w-8 text-blue-600" />
             <span className="text-xl font-bold text-slate-800">Sales Crew AI</span>
           </div>
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2 bg-slate-100 p-1 rounded-lg">
-               <NavButton label="1. Input" page={Page.INPUT} currentPage={currentPage} onClick={navigate} />
-               <NavButton label="2. Research" page={Page.RESEARCH} currentPage={currentPage} onClick={navigate} disabled={companies.length === 0} />
-               <NavButton label="3. CRM" page={Page.CRM} currentPage={currentPage} onClick={navigate} disabled={crmLeads.length === 0} />
-               <NavButton label="4. Role-Play" page={Page.ROLE_PLAY} currentPage={currentPage} onClick={navigate} disabled={!rolePlayLead} />
+               <NavButton label="Setup" page={Page.INPUT} currentPage={currentPage} onClick={navigate} />
+               <NavButton label="Leads" page={Page.RESEARCH} currentPage={currentPage} onClick={navigate} disabled={companies.length === 0} />
+               <NavButton label="Pipeline" page={Page.CRM} currentPage={currentPage} onClick={navigate} />
+               <NavButton label="Practice" page={Page.ROLE_PLAY} currentPage={currentPage} onClick={navigate} disabled={!rolePlayLead} />
             </div>
             <div className="flex items-center space-x-3">
               <span className="text-sm text-slate-600">{user.email}</span>
