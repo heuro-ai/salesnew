@@ -11,7 +11,7 @@ if (!PERPLEXITY_API_KEY && !PERPLEXITY_FALLBACK_KEY) {
 console.log("Perplexity primary key loaded:", !!PERPLEXITY_API_KEY);
 console.log("Perplexity fallback key loaded:", !!PERPLEXITY_FALLBACK_KEY);
 
-const buildPrompt = (input: UserInput, excludeCompanies: string[]) => {
+const buildPrompt = (input: UserInput, excludeCompanies: string[], invalidEmails: string[] = []) => {
   let prompt = `
     SYSTEM: You are Sales Crew AI, a precision-driven B2B sales intelligence and CRM assistant.
     Your goal is to identify the 10 most likely buyers for a user's product, validate their contact data with maximum accuracy, and assist in crafting personalized cold-sales outreach.
@@ -19,7 +19,13 @@ const buildPrompt = (input: UserInput, excludeCompanies: string[]) => {
 
     For each company, identify the best person to contact (CEO/Founder for SMB, VP/Head for mid-stage, or functional Director for enterprise).
 
-    CRITICAL EMAIL VALIDATION STEP: You must investigate the most common email format for each company's domain (e.g., firstname.lastname@domain.com, firstinitiallastname@domain.com). Your final output must contain only the single, most likely valid email address. A separate service will perform the final validation check, so your priority is finding the most probable address.
+    CRITICAL EMAIL VALIDATION REQUIREMENTS:
+    - You must research the company's actual email format by investigating their website, LinkedIn, or other public sources
+    - Look for email patterns from the company's domain (e.g., firstname.lastname@domain.com, flastname@domain.com, firstinitiallastname@domain.com)
+    - ONLY provide business email addresses, NEVER use generic email providers like gmail.com, yahoo.com, hotmail.com, outlook.com
+    - Each email MUST be verifiable or highly probable based on the company's known email format
+    - If you cannot find a verifiable email pattern, research alternative contacts at the same company
+    - The following emails have been marked as INVALID and must NOT be used: ${invalidEmails.join(', ')}
 
     For each validated contact, craft 3 unique subject lines and 3 email variants (short, medium, long).
     Personalize the pitch by mentioning the company's mission or recent activity.
@@ -31,6 +37,7 @@ const buildPrompt = (input: UserInput, excludeCompanies: string[]) => {
     - Explain reasoning for fit and buying likelihood.
     - If the user's product context is insufficient to generate high-quality leads, you MUST still return a valid JSON object with an empty "companies" array. Do not ask for more information or engage in conversation.
     - Do NOT include any of the following companies in your results: ${excludeCompanies.join(', ')}
+    - NEVER use personal email domains (gmail, yahoo, hotmail, outlook) for business contacts
 
     USER'S PRODUCT CONTEXT:
   `;
@@ -125,40 +132,64 @@ const callPerplexityAPI = async (prompt: string, systemPrompt?: string, useFallb
 };
 
 export const generateLeadsAndPitches = async (input: UserInput, userLocation: GeolocationCoordinates | null, excludeCompanies: string[] = []): Promise<Company[]> => {
-  const prompt = buildPrompt(input, excludeCompanies);
+  const maxRetries = 2;
+  let retryCount = 0;
+  let invalidEmails: string[] = [];
 
-  let rawText = '';
-  try {
-    rawText = await callPerplexityAPI(prompt);
+  while (retryCount <= maxRetries) {
+    const prompt = buildPrompt(input, excludeCompanies, invalidEmails);
 
-    const jsonText = rawText.replace(/^```json\n?/, '').replace(/```$/, '').trim();
-    const result = JSON.parse(jsonText);
-    const companies: Company[] = result.companies || [];
+    let rawText = '';
+    try {
+      rawText = await callPerplexityAPI(prompt);
 
-    const validatedCompanies = await Promise.all(
-      companies.map(async (company) => {
-        if (company.contact?.validated_email) {
-            const validationStatus = await validateEmail(company.contact.validated_email);
-            company.contact.validation_status = validationStatus;
-        }
-        return company;
-      })
-    );
+      const jsonText = rawText.replace(/^```json\n?/, '').replace(/```$/, '').trim();
+      const result = JSON.parse(jsonText);
+      const companies: Company[] = result.companies || [];
 
-    return validatedCompanies;
+      const validatedCompanies = await Promise.all(
+        companies.map(async (company) => {
+          if (company.contact?.validated_email) {
+              const validationStatus = await validateEmail(company.contact.validated_email);
+              company.contact.validation_status = validationStatus;
+          }
+          return company;
+        })
+      );
 
-  } catch (error) {
-    console.error("Error generating leads:", error);
-    if (error instanceof SyntaxError) {
-      console.error("Failed to parse JSON response from AI. Raw text:", rawText);
-      throw new Error("Failed to generate leads. The AI returned an invalid format. Please try again.");
+      const validCount = validatedCompanies.filter(c => c.contact.validation_status === 'valid').length;
+      const invalidCount = validatedCompanies.filter(c =>
+        c.contact.validation_status === 'invalid' ||
+        c.contact.validation_status === 'soft-fail' ||
+        c.contact.validation_status === 'unknown'
+      ).length;
+
+      if (validCount >= 5 || retryCount === maxRetries) {
+        return validatedCompanies;
+      }
+
+      console.log(`Retry ${retryCount + 1}: Only ${validCount} valid emails found. Retrying with better criteria...`);
+      invalidEmails = validatedCompanies
+        .filter(c => c.contact.validation_status !== 'valid')
+        .map(c => c.contact.validated_email);
+
+      retryCount++;
+
+    } catch (error) {
+      console.error("Error generating leads:", error);
+      if (error instanceof SyntaxError) {
+        console.error("Failed to parse JSON response from AI. Raw text:", rawText);
+        throw new Error("Failed to generate leads. The AI returned an invalid format. Please try again.");
+      }
+      const apiError = error as any;
+      if (apiError.message) {
+        throw new Error(`Failed to generate leads: ${apiError.message}`);
+      }
+      throw new Error("Failed to generate leads. Please check your input and try again.");
     }
-    const apiError = error as any;
-    if (apiError.message) {
-      throw new Error(`Failed to generate leads: ${apiError.message}`);
-    }
-    throw new Error("Failed to generate leads. Please check your input and try again.");
   }
+
+  return [];
 };
 
 export const getRolePlayFeedback = async (

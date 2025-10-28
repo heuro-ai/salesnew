@@ -101,7 +101,15 @@ export const RolePlay: React.FC<RolePlayProps> = ({ lead, userInput }) => {
     setFeedback(null);
     setIsSessionActive(true);
 
-    const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_PERPLEXITY_API_KEY });
+    const geminiApiKey = import.meta.env.VITE_GOOGLE_GEMINI_API_KEY;
+
+    if (!geminiApiKey) {
+      setIsSessionActive(false);
+      alert('Google Gemini API key is not configured. Please add VITE_GOOGLE_GEMINI_API_KEY to your .env file.');
+      return;
+    }
+
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
     outputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
     const outputNode = outputAudioContextRef.current.createGain();
     outputNode.connect(outputAudioContextRef.current.destination);
