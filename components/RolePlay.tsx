@@ -48,6 +48,7 @@ export const RolePlay: React.FC<RolePlayProps> = ({ lead, userInput }) => {
   const [isAiSpeaking, setIsAiSpeaking] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isGeneratingFeedback, setIsGeneratingFeedback] = useState(false);
+  const [currentApiKeyIndex, setCurrentApiKeyIndex] = useState(0);
 
   const sessionRef = useRef<LiveSession | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -96,19 +97,23 @@ export const RolePlay: React.FC<RolePlayProps> = ({ lead, userInput }) => {
 
   const startSession = useCallback(async () => {
     if (isSessionActive || !lead) return;
-    
+
     setTranscripts([]);
     setFeedback(null);
     setIsSessionActive(true);
 
-    const geminiApiKey = import.meta.env.VITE_GOOGLE_GEMINI_API_KEY;
+    const geminiApiKeys = [
+      import.meta.env.VITE_GOOGLE_GEMINI_API_KEY,
+      import.meta.env.VITE_GOOGLE_GEMINI_FALLBACK_KEY
+    ].filter(Boolean);
 
-    if (!geminiApiKey) {
+    if (geminiApiKeys.length === 0) {
       setIsSessionActive(false);
       alert('Google Gemini API key is not configured. Please add VITE_GOOGLE_GEMINI_API_KEY to your .env file.');
       return;
     }
 
+    const geminiApiKey = geminiApiKeys[currentApiKeyIndex % geminiApiKeys.length];
     const ai = new GoogleGenAI({ apiKey: geminiApiKey });
     outputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
     const outputNode = outputAudioContextRef.current.createGain();
@@ -195,7 +200,19 @@ export const RolePlay: React.FC<RolePlayProps> = ({ lead, userInput }) => {
         },
         onerror: (e: ErrorEvent) => {
           console.error("Live session error:", e);
-          stopSession(false);
+          const geminiApiKeys = [
+            import.meta.env.VITE_GOOGLE_GEMINI_API_KEY,
+            import.meta.env.VITE_GOOGLE_GEMINI_FALLBACK_KEY
+          ].filter(Boolean);
+
+          if (currentApiKeyIndex + 1 < geminiApiKeys.length) {
+            console.log('Attempting to use fallback API key...');
+            setCurrentApiKeyIndex(prev => prev + 1);
+            setTimeout(() => startSession(), 1000);
+          } else {
+            alert('Failed to connect with all available API keys. Please check your configuration.');
+            stopSession(false);
+          }
         },
         onclose: () => {
           console.log('Live session closed.');
@@ -204,7 +221,7 @@ export const RolePlay: React.FC<RolePlayProps> = ({ lead, userInput }) => {
       }
     });
     sessionRef.current = await sessionPromise;
-  }, [isSessionActive, lead, userInput, stopSession]);
+  }, [isSessionActive, lead, userInput, stopSession, currentApiKeyIndex]);
   
   useEffect(() => {
     return () => {
